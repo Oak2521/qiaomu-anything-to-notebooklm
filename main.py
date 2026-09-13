@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """qiaomu-anything-to-notebooklm - 多源内容智能处理器
-自动识别输入类型，上传到 NotebookLM 并生成指定格式
+默认本地提取；只有明确授权后使用 --upload 才上传到 NotebookLM
 支持深度分析模式：三轮递进提问（概览→深度挖掘→综合反刍）
 """
 
@@ -314,14 +314,31 @@ def deep_analysis(file_path, title, content_type, to_feishu=False):
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: main.py <输入路径或URL> [--deep-analysis] [--to-feishu]", file=sys.stderr)
+        print("用法: main.py <输入路径或URL> [--upload] [--deep-analysis] [--to-feishu]", file=sys.stderr)
         sys.exit(1)
 
     input_arg = sys.argv[1]
     deep_mode = '--deep-analysis' in sys.argv
     to_feishu = '--to-feishu' in sys.argv
 
+    if '--upload' not in sys.argv:
+        if deep_mode or to_feishu:
+            raise SystemExit('远端分析/发布需要明确的同范围授权和 --upload；默认只做本地提取。')
+        kind = detect_input_type(input_arg)
+        if kind in ('url', 'x_twitter'):
+            from scripts.fetch_url import fetch
+            print(fetch(input_arg))
+        elif kind == 'epub':
+            print(extract_epub_to_txt(Path(input_arg).expanduser()))
+        elif kind == 'document' and Path(input_arg).suffix.lower() in ('.txt', '.md'):
+            print(Path(input_arg).expanduser().read_text(encoding='utf-8'))
+        else:
+            raise SystemExit('请使用已安装的专用本地提取工具；微信优先 Moore 微信技能。此入口未上传或调用转写服务。')
+        return
+
     input_type = detect_input_type(input_arg)
+    if input_type == 'podcast' and '--allow-getnote' not in sys.argv:
+        raise SystemExit('Get笔记转写需要独立同范围授权和 --allow-getnote。NotebookLM 上传授权不覆盖该服务。')
     print(f"📋 检测到输入类型: {input_type}")
 
     # 根据类型处理
@@ -402,7 +419,7 @@ def main():
 
     elif input_type == 'x_twitter':
         print(f"🐦 处理 X/Twitter: {input_arg}")
-        print("   通过代理级联获取推文内容...")
+        print("   通过公开页面读取推文内容，遇到访问控制停止...")
 
         fetch_script = os.path.join(os.path.dirname(__file__), 'scripts', 'fetch_url.sh')
         result = subprocess.run(
