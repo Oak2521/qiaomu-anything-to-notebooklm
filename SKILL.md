@@ -1,18 +1,18 @@
 ---
 name: qiaomu-anything-to-notebooklm
-description: 多源内容智能处理器：支持微信公众号、网页、YouTube、播客（小宇宙/喜马拉雅）、PDF、Markdown等，自动上传到NotebookLM并生成播客/PPT/思维导图等多种格式。支持深度分析模式和飞书文档自动创建
+description: 多源内容智能处理器：支持微信公众号、网页、YouTube、播客（小宇宙/喜马拉雅）、PDF、Markdown等，经明确请求上传到NotebookLM并生成播客/PPT/思维导图等多种格式。支持深度分析模式和飞书文档自动创建
 user-invocable: true
 homepage: https://github.com/joeseesun/qiaomu-anything-to-notebooklm
 ---
 
 # 多源内容 → NotebookLM 智能处理器
 
-自动从多种来源获取内容，上传到 NotebookLM，并根据自然语言指令生成播客、PPT、思维导图等多种格式。
+从多种来源提取内容，仅在明确上传授权后使用 NotebookLM，并根据自然语言指令生成播客、PPT、思维导图等多种格式。
 
 ## 支持的内容源
 
 ### 1. 微信公众号文章
-通过 MCP 服务器自动抓取微信公众号文章内容（绕过反爬虫）
+优先使用宿主已安装的 Moore 微信技能读取公开文章；遇到访问控制按其门禁处理
 
 ### 2. 任意网页链接
 支持任何公开可访问的网页（新闻、博客、文档等）
@@ -21,13 +21,13 @@ homepage: https://github.com/joeseesun/qiaomu-anything-to-notebooklm
 通过 Get笔记 API 获取完整转写文本（带时间戳），支持小宇宙、喜马拉雅、B站视频等音频/视频平台
 
 ### 4. X/Twitter 帖子
-通过内置代理级联（r.jina.ai → defuddle.md → agent-fetch）抓取推文内容（含长推文线程），转为 Markdown
+使用公开页面读取路径提取推文，不能取得线程全文时明确缺失
 
-### 5. 付费墙网站自动绕过
-自动检测并绕过 NYT、WSJ、FT、Economist、Bloomberg、Medium 等 300+ 付费网站的付费墙。策略：UA 伪装（Googlebot/Bingbot）→ Referer 伪装（Google/Facebook）→ AMP 页面 → archive.today 存档
+### 5. 公开网页提取与访问边界
+只读取公开可访问正文；遇到登录、付费墙或验证码停止该路径，交付已取得部分及缺失范围。不得伪装爬虫、来源或网络身份绕过访问控制。
 
 ### 5. YouTube 视频
-**直接传递给 NotebookLM！** NotebookLM 原生支持 YouTube 链接，会自动提取视频字幕和元数据，无需手动下载字幕或转写。禁止使用 yt-dlp 或浏览器自动化提取字幕。
+**先本地提取；已授权上传时才传递给 NotebookLM！** NotebookLM 原生支持 YouTube 链接，会自动提取视频字幕和元数据，无需手动下载字幕或转写。普通阅读可使用宿主已安装的公开字幕提取工具。
 
 ### 4. Office 文档
 - **Word (DOCX)** - 保留表格和格式
@@ -172,7 +172,7 @@ notebooklm list  # 验证认证成功
 | "深度分析" / "提炼核心观点" / "递归提问" / "深度解读" | deep-analysis | 自动生成10个问题并递归提问 |
 | "写入飞书" / "创建飞书文档" / "生成飞书文档" / "保存到飞书" | feishu | 创建飞书文档并写入内容 |
 
-**如果没有明确指令**，默认只上传不生成任何内容，等待用户后续指令。
+**上传门禁**：只有用户明确要求上传到 NotebookLM，或已有仍有效的同内容、目标 Notebook 和范围授权，才执行 source add、创建 notebook 或 generate。普通链接阅读、摘要、提炼与本地转换默认在本地/对话交付，不上传、不创建外部对象。只说生成 PPT 或报告并不选择 NotebookLM；用已授权宿主能力完成，外部上传确有必要时再说明目标和内容。已有同范围授权不重复询问。
 
 ## 工作流程
 
@@ -183,17 +183,17 @@ Claude 自动识别输入类型：
 | 输入特征 | 识别为 | 处理方式 |
 |---------|-------|---------|
 | `https://mp.weixin.qq.com/s/` | 微信公众号 | MCP 工具抓取 |
-| `https://youtube.com/...` 或 `https://youtu.be/...` | YouTube | 直接传递给 NotebookLM |
+| `https://youtube.com/...` 或 `https://youtu.be/...` | YouTube | 先本地提取；已授权上传时才传递给 NotebookLM |
 | `xiaoyuzhoufm.com` 或 `ximalaya.com` 或 `bilibili.com` | 播客/视频 | Get笔记 API 转写 → TXT |
-| `x.com` 或 `twitter.com` | X/Twitter 帖子 | 内置代理级联抓取 → TXT |
-| `https://` 或 `http://`（付费网站） | 付费墙网页 | 内置付费墙绕过（UA伪装+archive.today）→ TXT |
-| `https://` 或 `http://` | 网页 | 直接传递给 NotebookLM |
+| `x.com` 或 `twitter.com` | X/Twitter 帖子 | 公开页面读取 → TXT；访问控制即停 |
+| `https://` 或 `http://`（受限正文） | 访问受限 | 停止提取，说明缺失并请用户提供有权使用的材料 |
+| `https://` 或 `http://` | 网页 | 先本地提取；已授权上传时才传递给 NotebookLM |
 | `/path/to/file.pdf` | PDF 文件 | markitdown 转 Markdown → TXT |
 | `/path/to/file.epub` | EPUB 电子书 | **Python ebooklib** 提取文本 → TXT（避免 Calibre） |
 | `/path/to/file.docx` | Word 文档 | markitdown 转 Markdown → TXT |
 | `/path/to/file.pptx` | PowerPoint | markitdown 转 Markdown → TXT |
 | `/path/to/file.xlsx` | Excel | markitdown 转 Markdown → TXT |
-| `/path/to/file.md` | Markdown | 直接上传 |
+| `/path/to/file.md` | Markdown | 本地读取；上传须通过门禁 |
 | `/path/to/image.jpg` | 图片（OCR） | markitdown OCR → TXT |
 | `/path/to/audio.mp3` | 音频 | markitdown 转录 → TXT |
 | `/path/to/file.zip` | ZIP 压缩包 | 解压 → markitdown 批量转换 |
@@ -202,39 +202,31 @@ Claude 自动识别输入类型：
 ### Step 2: 获取内容
 
 **微信公众号**：
-- 使用 MCP 工具 `read_weixin_article`
+- 优先使用已安装的 `moore-wechat-article-downloader`；不存在时才使用已可调用的 `read_weixin_article`
 - 返回：title, author, publish_time, content
 - 保存为 TXT：`/tmp/weixin_{title}_{timestamp}.txt`
 
 **播客/视频（小宇宙/喜马拉雅/B站）**：
 - 通过 Get笔记 API 获取完整转写文本
 - 调用 `python3 ~/.claude/skills/qiaomu-anything-to-notebooklm/scripts/get_podcast_transcript.py <URL>`
-- 脚本自动执行：创建链接笔记 → 等待转写 → 获取全文 → 保存 TXT
+- 此路径会向 Get笔记 创建外部对象，需要对应服务和内容范围的明确授权。授权后脚本执行：创建链接笔记 → 等待转写 → 获取全文 → 保存 TXT
 - 返回 TXT 路径和标题
 - 依赖：Get笔记 API Key（环境变量 `GETNOTE_API_KEY`、`GETNOTE_CLIENT_ID`）+ Web Token（`~/.claude/skills/getnote/tokens.json`）
 
 **X/Twitter 帖子**：
-- 通过内置代理级联抓取推文内容（r.jina.ai → defuddle.md → agent-fetch）
+- 使用宿主已有的公开推文读取能力；遇到登录或访问限制停止该路径
 - 调用 `bash ~/.claude/skills/qiaomu-anything-to-notebooklm/scripts/fetch_url.sh "https://x.com/..."` 获取 Markdown 内容
-- 自动处理 X 登录墙和错误页面
-- 保存为 TXT 后上传到 NotebookLM
+- 检测登录墙或错误页面，报告未取得正文
+- 保存为本地 TXT；仅在通过上传门禁后上传到 NotebookLM
 
 **网页**：
-- 直接使用 `notebooklm source add <URL>`
-- NotebookLM 自动提取内容
-- **付费墙绕过**：遇到付费网站时，`fetch_url.sh` 自动启用多重绕过策略
+- 普通读取使用宿主网页工具，或 `python scripts/fetch_url.py <URL>` 直接提取公开正文。
+- `fetch_url.sh` 是该 Python 入口的兼容包装，不使用代理或访问控制绕过。
+- 已通过上传门禁时才执行 `notebooklm source add <URL>`，随后核对源状态。
 
-**YouTube 🔴 特殊规则（最重要！）**：
-- **直接传递 URL 给 NotebookLM！** `notebooklm source add <YouTube_URL>`
-- **禁止**使用 yt-dlp、yt-search-download、whisper、浏览器自动化等手段下载字幕
-- NotebookLM 原生支持 YouTube，会自动提取字幕和元数据
-- 这是最快速、最高效的方式，不需要任何中间步骤
-  1. **r.jina.ai** — 通常能绕过软付费墙
-  2. **Googlebot/Bingbot UA 伪装** — 模拟搜索引擎爬虫（网站为了 SEO 通常给爬虫全文）
-  3. **Referer 伪装** — 伪装来自 Google/Facebook（社交引流豁免）
-  4. **AMP 页面** — AMP 版本通常没有付费墙
-  5. **archive.today** — 从网页存档获取全文
-  - 支持的付费网站：NYT、WSJ、FT、Economist、Bloomberg、Washington Post、New Yorker、Wired、The Atlantic、Medium、MIT Technology Review、SCMP 等 300+ 站点
+**YouTube**：
+- 已获 NotebookLM 上传授权时可直接添加 URL，利用其字幕提取。
+- 普通观看/摘要请求先使用宿主已有字幕读取能力，不自动上传。没有公开字幕则说明缺失。
 
 **Office 文档/电子书/PDF**：
 - **EPUB**：使用 Python ebooklib + BeautifulSoup 直接提取文本（避免 Calibre 架构问题）
@@ -243,7 +235,7 @@ Claude 自动识别输入类型：
 - 保存为 TXT：`/tmp/{filename}_converted_{timestamp}.txt`
 
 **本地 Markdown**：
-- 直接上传：`notebooklm source add /path/to/file.md`
+- 本地读取；仅在上传授权内执行 `notebooklm source add /path/to/file.md`
 
 **图片（OCR）**：
 - markitdown 自动 OCR 识别文字
@@ -266,7 +258,7 @@ Claude 自动识别输入类型：
 - 汇总前 3-5 条结果
 - 保存为 TXT：`/tmp/search_{keyword}_{timestamp}.txt`
 
-### Step 3: 上传到 NotebookLM
+### Step 3（仅在上传门禁通过后）: 上传到 NotebookLM
 
 调用 `notebooklm` skill：
 
@@ -284,11 +276,11 @@ notebooklm source add /tmp/weixin_xxx.txt --title "{title}"  # 上传文件
 ```bash
 # 仅深度分析
 python ~/.claude/skills/qiaomu-anything-to-notebooklm/main.py \
-  /path/to/file.epub --deep-analysis
+  /path/to/file.epub --upload --deep-analysis
 
 # 深度分析 + 自动创建飞书文档
 python ~/.claude/skills/qiaomu-anything-to-notebooklm/main.py \
-  /path/to/file.epub --deep-analysis --to-feishu
+  /path/to/file.epub --upload --deep-analysis --to-feishu
 ```
 
 **深度分析流程**：
@@ -377,7 +369,7 @@ python ~/.claude/skills/qiaomu-anything-to-notebooklm/main.py \
 
 **执行流程**：
 1. 识别为 YouTube 链接
-2. 直接传递给 NotebookLM（自动提取字幕）
+2. 先本地提取；已授权上传时才传递给 NotebookLM（自动提取字幕）
 3. 生成思维导图（`generate mind-map`）
 4. 下载思维导图
 
@@ -740,3 +732,5 @@ https://mp.weixin.qq.com/s/abc123
 **Skill 创建时间**：2026-01-25
 **最后更新**：2026-01-25
 **版本**：v1.0.0
+
+CLI 的 Get笔记播客转写还要求 `--allow-getnote`，仅有 NotebookLM 上传授权不足以启用该外部服务。
